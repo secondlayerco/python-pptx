@@ -5,8 +5,12 @@ from __future__ import annotations
 from typing import IO, TYPE_CHECKING, Iterable
 
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
+from pptx.opc.eot import ttf_to_eot
 from pptx.opc.package import XmlPart
 from pptx.opc.packuri import PackURI
+from pptx.oxml.ns import qn
+from pptx.oxml.xmlchemy import OxmlElement
+from pptx.parts.font import FontPart
 from pptx.parts.slide import NotesMasterPart, SlidePart
 from pptx.presentation import Presentation
 from pptx.util import lazyproperty
@@ -103,6 +107,37 @@ class PresentationPart(XmlPart):
             slide_part = self.related_part(rId)
             slide_part.partname = PackURI("/ppt/slides/slide%d.xml" % (idx + 1))
 
+    def embed_font(
+        self, typeface: str, font_bytes: bytes, bold: bool = False, italic: bool = False
+    ) -> None:
+        """Embed a font file into the presentation.
+
+        Args:
+            typeface: The font family name (must match what's used in run.font.name).
+            font_bytes: Raw TTF/OTF file bytes.
+            bold: True if this is the bold variant.
+            italic: True if this is the italic variant.
+        """
+        # 1. Ensure embedTrueTypeFonts is enabled on the presentation element
+        self._element.set("embedTrueTypeFonts", "1")
+
+        # 2. Convert TTF/OTF to EOT format and create font part
+        eot_bytes = ttf_to_eot(font_bytes)
+        font_part = FontPart.new(eot_bytes, self.package)
+        rId = self.relate_to(font_part, RT.FONT)
+
+        # 3. Get or create <p:embeddedFontLst>
+        embeddedFontLst = self._element.get_or_add_embeddedFontLst()
+
+        # 4. Find or create <p:embeddedFont> for this typeface
+        embeddedFont = self._get_or_add_embedded_font(embeddedFontLst, typeface)
+
+        # 5. Add the style variant sub-element with the rId
+        style_tag = self._font_style_tag(bold, italic)
+        style_elm = OxmlElement(style_tag)
+        style_elm.set(qn("r:id"), rId)
+        embeddedFont.append(style_elm)
+
     def save(self, path_or_stream: str | IO[bytes]):
         """Save this presentation package to `path_or_stream`.
 
@@ -117,6 +152,34 @@ class PresentationPart(XmlPart):
             if self.related_part(sldId.rId) is slide_part:
                 return sldId.id
         raise ValueError("matching slide_part not found")
+
+    @staticmethod
+    def _font_style_tag(bold: bool, italic: bool) -> str:
+        """Return the element tag for the font style variant."""
+        if bold and italic:
+            return "p:boldItalic"
+        if bold:
+            return "p:bold"
+        if italic:
+            return "p:italic"
+        return "p:regular"
+
+    @staticmethod
+    def _get_or_add_embedded_font(lst, typeface: str):
+        """Find existing <p:embeddedFont> for typeface, or create one."""
+        for ef in lst.findall(qn("p:embeddedFont")):
+            font_elm = ef.find(qn("p:font"))
+            if font_elm is not None and font_elm.get("typeface") == typeface:
+                return ef
+        # Create new
+        ef = OxmlElement("p:embeddedFont")
+        font_elm = OxmlElement("p:font")
+        font_elm.set("typeface", typeface)
+        font_elm.set("pitchFamily", "2")
+        font_elm.set("charset", "0")
+        ef.append(font_elm)
+        lst.append(ef)
+        return ef
 
     @property
     def _next_slide_partname(self):

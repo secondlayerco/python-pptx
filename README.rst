@@ -13,6 +13,19 @@ indexing text and images.
 In can also be used to simply automate the production of a slide or two that would be
 tedious to get right by hand, which is how this all got started.
 
+This fork adds support for **font embedding**, allowing custom fonts (TTF/OTF) to be
+embedded directly into the .pptx package so they render correctly on any machine::
+
+    from pptx import Presentation
+
+    prs = Presentation()
+    # ... add slides and text with run.font.name = "My Custom Font" ...
+
+    with open("MyCustomFont-Regular.ttf", "rb") as f:
+        prs.embed_font("My Custom Font", f.read())
+
+    prs.save("output.pptx")
+
 More information is available in the `python-pptx documentation`_.
 
 Browse `examples with screenshots`_ to get a quick idea what you can do with

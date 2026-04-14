@@ -76,6 +76,17 @@ class DescribePresentation(object):
         prs.save(file_)
         prs_part_.save.assert_called_once_with(file_)
 
+    def it_can_embed_a_font(self, request):
+        prs_part_ = instance_mock(request, PresentationPart)
+        prs = Presentation(None, prs_part_)
+        font_bytes = b"fake-font"
+
+        prs.embed_font("MyFont", font_bytes, bold=True, italic=False)
+
+        prs_part_.embed_font.assert_called_once_with(
+            "MyFont", font_bytes, bold=True, italic=False
+        )
+
     # fixtures -------------------------------------------------------
 
     @pytest.fixture

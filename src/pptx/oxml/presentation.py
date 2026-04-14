@@ -11,12 +11,30 @@ if TYPE_CHECKING:
     from pptx.util import Length
 
 
+class CT_EmbeddedFontList(BaseOxmlElement):
+    """`p:embeddedFontLst` element containing embedded font entries."""
+
+    embeddedFont_lst: list[CT_EmbeddedFont]
+
+    embeddedFont = ZeroOrMore("p:embeddedFont")
+
+
+class CT_EmbeddedFont(BaseOxmlElement):
+    """`p:embeddedFont` element describing one embedded font.
+
+    Children: p:font (required), then optional p:regular, p:bold, p:italic, p:boldItalic.
+    """
+
+    pass
+
+
 class CT_Presentation(BaseOxmlElement):
     """`p:presentation` element, root of the Presentation part stored as `/ppt/presentation.xml`."""
 
     get_or_add_sldSz: Callable[[], CT_SlideSize]
     get_or_add_sldIdLst: Callable[[], CT_SlideIdList]
     get_or_add_sldMasterIdLst: Callable[[], CT_SlideMasterIdList]
+    get_or_add_embeddedFontLst: Callable[[], CT_EmbeddedFontList]
 
     sldMasterIdLst: CT_SlideMasterIdList | None = (
         ZeroOrOne(  # pyright: ignore[reportAssignmentType]
@@ -35,6 +53,20 @@ class CT_Presentation(BaseOxmlElement):
     )
     sldSz: CT_SlideSize | None = ZeroOrOne(  # pyright: ignore[reportAssignmentType]
         "p:sldSz", successors=("p:notesSz",)
+    )
+    embeddedFontLst: CT_EmbeddedFontList | None = (
+        ZeroOrOne(  # pyright: ignore[reportAssignmentType]
+            "p:embeddedFontLst",
+            successors=(
+                "p:custShowLst",
+                "p:photoAlbum",
+                "p:custDataLst",
+                "p:kinsoku",
+                "p:defaultTextStyle",
+                "p:modifyVerifier",
+                "p:extLst",
+            ),
+        )
     )
 
 

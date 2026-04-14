@@ -1,3 +1,4 @@
+.DS_Store
 /build/
 .cache
 .coverage
@@ -11,3 +12,4 @@ _scratch/
 /spec/gen_spec/spec*.db
 tags
 /tests/debug.py
+test_custom_font.pptx
