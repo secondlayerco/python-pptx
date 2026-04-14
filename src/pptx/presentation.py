@@ -42,6 +42,19 @@ class Presentation(PartElementProxy):
         """
         return self.part.notes_master
 
+    def embed_font(
+        self, typeface: str, font_bytes: bytes, bold: bool = False, italic: bool = False
+    ) -> None:
+        """Embed a font file into the presentation package.
+
+        Args:
+            typeface: The font family name as used in run.font.name.
+            font_bytes: Raw TTF/OTF font file bytes.
+            bold: True if this is the bold variant of the font.
+            italic: True if this is the italic variant of the font.
+        """
+        self.part.embed_font(typeface, font_bytes, bold=bold, italic=italic)
+
     def save(self, file: str | IO[bytes]):
         """Writes this presentation to `file`.
 

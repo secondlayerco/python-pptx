@@ -6,15 +6,24 @@ import pytest
 
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 from pptx.opc.packuri import PackURI
+from pptx.oxml.ns import qn
 from pptx.package import Package
 from pptx.parts.coreprops import CorePropertiesPart
+from pptx.parts.font import FontPart
 from pptx.parts.presentation import PresentationPart
 from pptx.parts.slide import NotesMasterPart, SlideMasterPart, SlidePart
 from pptx.presentation import Presentation
 from pptx.slide import NotesMaster, Slide, SlideLayout, SlideMaster
 
 from ..unitutil.cxml import element
-from ..unitutil.mock import call, class_mock, instance_mock, method_mock, property_mock
+from ..unitutil.mock import (
+    call,
+    class_mock,
+    function_mock,
+    instance_mock,
+    method_mock,
+    property_mock,
+)
 
 
 class DescribePresentationPart(object):
@@ -189,6 +198,89 @@ class DescribePresentationPart(object):
         prs_part = PresentationPart(None, None, None, prs_elm)
 
         assert prs_part._next_slide_partname == PackURI("/ppt/slides/slide3.xml")
+
+    def it_can_embed_a_font(self, request, package_, relate_to_):
+        font_bytes = b"\x00\x01\x00\x00fake-font-data"
+        eot_bytes = b"fake-eot-data"
+        ttf_to_eot_ = function_mock(
+            request, "pptx.parts.presentation.ttf_to_eot", return_value=eot_bytes
+        )
+        font_part_ = instance_mock(request, FontPart)
+        FontPart_ = class_mock(
+            request, "pptx.parts.presentation.FontPart", return_value=font_part_
+        )
+        FontPart_.new.return_value = font_part_
+        relate_to_.return_value = "rId10"
+        prs_elm = element("p:presentation")
+        prs_part = PresentationPart(None, None, package_, prs_elm)
+
+        prs_part.embed_font("Beth Ellen Regular", font_bytes)
+
+        ttf_to_eot_.assert_called_once_with(font_bytes)
+        FontPart_.new.assert_called_once_with(eot_bytes, package_)
+        relate_to_.assert_called_once_with(prs_part, font_part_, RT.FONT)
+        # verify embedTrueTypeFonts attribute is set
+        assert prs_elm.get("embedTrueTypeFonts") == "1"
+        # verify XML structure
+        embeddedFontLst = prs_elm.embeddedFontLst
+        assert embeddedFontLst is not None
+        ef_list = embeddedFontLst.findall(qn("p:embeddedFont"))
+        assert len(ef_list) == 1
+        font_elm = ef_list[0].find(qn("p:font"))
+        assert font_elm is not None
+        assert font_elm.get("typeface") == "Beth Ellen Regular"
+        regular_elm = ef_list[0].find(qn("p:regular"))
+        assert regular_elm is not None
+        assert regular_elm.get(qn("r:id")) == "rId10"
+
+    def it_can_embed_bold_and_italic_variants(self, request, package_, relate_to_):
+        function_mock(
+            request, "pptx.parts.presentation.ttf_to_eot", return_value=b"eot"
+        )
+        font_part_ = instance_mock(request, FontPart)
+        FontPart_ = class_mock(
+            request, "pptx.parts.presentation.FontPart", return_value=font_part_
+        )
+        FontPart_.new.return_value = font_part_
+        relate_to_.side_effect = ["rId10", "rId11", "rId12", "rId13"]
+        prs_elm = element("p:presentation")
+        prs_part = PresentationPart(None, None, package_, prs_elm)
+
+        prs_part.embed_font("MyFont", b"regular", bold=False, italic=False)
+        prs_part.embed_font("MyFont", b"bold", bold=True, italic=False)
+        prs_part.embed_font("MyFont", b"italic", bold=False, italic=True)
+        prs_part.embed_font("MyFont", b"bolditalic", bold=True, italic=True)
+
+        # all should be under the same <p:embeddedFont>
+        embeddedFontLst = prs_elm.embeddedFontLst
+        ef_list = embeddedFontLst.findall(qn("p:embeddedFont"))
+        assert len(ef_list) == 1
+        ef = ef_list[0]
+        assert ef.find(qn("p:regular")).get(qn("r:id")) == "rId10"
+        assert ef.find(qn("p:bold")).get(qn("r:id")) == "rId11"
+        assert ef.find(qn("p:italic")).get(qn("r:id")) == "rId12"
+        assert ef.find(qn("p:boldItalic")).get(qn("r:id")) == "rId13"
+
+    def it_creates_separate_entries_for_different_typefaces(self, request, package_, relate_to_):
+        function_mock(
+            request, "pptx.parts.presentation.ttf_to_eot", return_value=b"eot"
+        )
+        font_part_ = instance_mock(request, FontPart)
+        FontPart_ = class_mock(
+            request, "pptx.parts.presentation.FontPart", return_value=font_part_
+        )
+        FontPart_.new.return_value = font_part_
+        relate_to_.side_effect = ["rId10", "rId11"]
+        prs_elm = element("p:presentation")
+        prs_part = PresentationPart(None, None, package_, prs_elm)
+
+        prs_part.embed_font("FontA", b"a")
+        prs_part.embed_font("FontB", b"b")
+
+        ef_list = prs_elm.embeddedFontLst.findall(qn("p:embeddedFont"))
+        assert len(ef_list) == 2
+        assert ef_list[0].find(qn("p:font")).get("typeface") == "FontA"
+        assert ef_list[1].find(qn("p:font")).get("typeface") == "FontB"
 
     # fixture components ---------------------------------------------
 
